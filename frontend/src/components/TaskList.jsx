@@ -35,16 +35,20 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
   useEffect(() => { api.getProjects().then(setProjects).catch(() => {}); }, []);
 
   const changeStatus = async (id, s) => {
-    changingRef.current = true; // 加锁
+    changingRef.current = true; // 加锁，防止 load 覆盖
     try {
       await api.updateTask(id, { status: s });
       if (s === 'completed') {
+        // 先本地移除（立即消失），再从后端刷新（更新排名）
         setTasks(prev => prev.filter(t => t.task_id !== id));
+        changingRef.current = false; // 解锁后再刷新
+        load();
+        return;
       } else {
         setTasks(prev => prev.map(t => t.task_id === id ? { ...t, status: s } : t));
       }
     } finally {
-      changingRef.current = false; // 解锁
+      changingRef.current = false;
     }
   };
 
