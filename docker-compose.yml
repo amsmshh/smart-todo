@@ -1,0 +1,52 @@
+services:
+  # ========== MySQL 数据库 ==========
+  mysql:
+    image: mysql:8.0
+    container_name: smart-todo-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-SmartTodo@2026}
+      MYSQL_DATABASE: smart_todo
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d  # 自动执行 sql 目录下的初始化脚本
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== 后端 API ==========
+  backend:
+    build: ./backend
+    container_name: smart-todo-backend
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-SmartTodo@2026}
+      DB_NAME: smart_todo
+      PORT: 3001
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ========== 前端 ==========
+  frontend:
+    build: ./frontend
+    container_name: smart-todo-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
