@@ -19,8 +19,10 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
   const [selected, setSelected] = useState(new Set());
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const changingRef = useRef(false);
 
   const load = useCallback(() => {
+    if (changingRef.current) return; // 状态变更中，跳过加载
     setLoading(true);
     const p = { user_id: userId };
     if (statusFilter && statusFilter !== 'active') p.status = statusFilter;
@@ -33,15 +35,17 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
   useEffect(() => { api.getProjects().then(setProjects).catch(() => {}); }, []);
 
   const changeStatus = async (id, s) => {
-    await api.updateTask(id, { status: s });
-    if (s === 'completed') {
-      // 完成：本地移除，不触发重新加载（排名不变）
-      setTasks(prev => prev.filter(t => t.task_id !== id));
-    } else {
-      // 其他状态：本地更新
-      setTasks(prev => prev.map(t => t.task_id === id ? { ...t, status: s } : t));
+    changingRef.current = true; // 加锁
+    try {
+      await api.updateTask(id, { status: s });
+      if (s === 'completed') {
+        setTasks(prev => prev.filter(t => t.task_id !== id));
+      } else {
+        setTasks(prev => prev.map(t => t.task_id === id ? { ...t, status: s } : t));
+      }
+    } finally {
+      changingRef.current = false; // 解锁
     }
-    // 不调用 onRefresh，避免组件重新挂载导致排名重算
   };
 
   const remove = async (id) => {
