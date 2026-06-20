@@ -35,13 +35,13 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
   const changeStatus = async (id, s) => {
     await api.updateTask(id, { status: s });
     if (s === 'completed') {
-      // 完成：从列表移除，保留剩余任务排名不变
+      // 完成：本地移除，不触发重新加载（排名不变）
       setTasks(prev => prev.filter(t => t.task_id !== id));
     } else {
-      // 其他状态变更：本地更新，不重新加载
+      // 其他状态：本地更新
       setTasks(prev => prev.map(t => t.task_id === id ? { ...t, status: s } : t));
     }
-    onRefresh?.();
+    // 不调用 onRefresh，避免组件重新挂载导致排名重算
   };
 
   const remove = async (id) => {
