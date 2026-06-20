@@ -25,15 +25,43 @@ router.post('/login', async (req, res) => {
 router.post('/register', async (req, res) => {
   try {
     const { username, password, email } = req.body;
-    const [results] = await db.query('CALL sp_register_user(?, ?, ?, @result)', [username, password, email]);
-    // 存储过程通过 SELECT 返回结果集，第一个数组就是
-    const row = results[0]?.[0];
-    const msg = row?.result || '注册失败';
-    if (msg === '注册成功') {
-      res.json({ success: true, message: msg });
-    } else {
-      res.status(400).json({ success: false, message: msg });
+
+    // 检查用户名是否已存在
+    const [existingUser] = await db.query('SELECT user_id FROM t_user WHERE username = ?', [username]);
+    if (existingUser.length > 0) {
+      return res.status(400).json({ success: false, message: '用户名已存在' });
     }
+
+    // 检查邮箱是否已注册
+    const [existingEmail] = await db.query('SELECT user_id FROM t_user WHERE email = ?', [email]);
+    if (existingEmail.length > 0) {
+      return res.status(400).json({ success: false, message: '邮箱已被注册' });
+    }
+
+    // 插入新用户
+    const [result] = await db.query(
+      'INSERT INTO t_user (username, password_hash, email) VALUES (?, SHA2(?, 256), ?)',
+      [username, password, email]
+    );
+    const newUserId = result.insertId;
+
+    // 为新用户创建默认优先级规则
+    await db.query(
+      `INSERT INTO t_priority_rule (rule_name, user_id, w_urgency, w_importance, w_dependency, w_energy, w_history, is_default)
+       VALUES ('默认均衡规则', ?, 0.30, 0.25, 0.20, 0.15, 0.10, 1)`,
+      [newUserId]
+    );
+
+    // 初始化精力画像
+    await db.query(
+      `INSERT INTO t_energy_profile (user_id, day_of_week, hour_slot, energy_level, sample_count)
+       SELECT ?, d.d, h.h, 0.5, 0
+       FROM (SELECT 1 AS d UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7) d
+       CROSS JOIN (SELECT 9 AS h UNION SELECT 10 UNION SELECT 11 UNION SELECT 14 UNION SELECT 15 UNION SELECT 16) h`,
+      [newUserId]
+    );
+
+    res.json({ success: true, message: '注册成功' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
