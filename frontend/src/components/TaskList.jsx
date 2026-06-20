@@ -34,7 +34,9 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
 
   const changeStatus = async (id, s) => {
     await api.updateTask(id, { status: s });
-    load(); onRefresh?.();
+    // 本地更新状态，不重新加载列表（避免排名变化和任务消失）
+    setTasks(prev => prev.map(t => t.task_id === id ? { ...t, status: s } : t));
+    onRefresh?.();
   };
 
   const remove = async (id) => {
@@ -166,7 +168,7 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
                     onClick={e => e.stopPropagation()}
                     onChange={e => toggleSelect(t.task_id, e)} />
                   <span className="task-rank">#{t.priority_rank || '-'}</span>
-                  <span className="task-title">{t.title}</span>
+                  <span className={`task-title ${t.status === 'completed' ? 'completed-title' : ''}`}>{t.title}</span>
                   <span className="task-score">{score.toFixed(1)}</span>
                 </div>
                 <div className="task-card-meta">

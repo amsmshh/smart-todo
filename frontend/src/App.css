@@ -465,6 +465,7 @@ h3 {
 }
 
 .task-title { flex: 1; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.task-title.completed-title { text-decoration: line-through; color: var(--text-muted); }
 
 .task-score {
   font-size: 24px;
