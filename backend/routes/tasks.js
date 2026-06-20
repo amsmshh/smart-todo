@@ -122,6 +122,13 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { title, description, status, priority_level, deadline, estimated_hours, project_id, category_id, eisenhower_quadrant } = req.body;
+
+    // 如果状态变为 completed，同时设置 completed_at
+    let completedAt = undefined;
+    if (status === 'completed') {
+      completedAt = new Date();
+    }
+
     await db.query(
       `UPDATE t_task SET
         title = COALESCE(?, title),
@@ -132,14 +139,15 @@ router.put('/:id', async (req, res) => {
         estimated_hours = COALESCE(?, estimated_hours),
         project_id = ?,
         category_id = ?,
-        eisenhower_quadrant = ?
+        eisenhower_quadrant = ?,
+        completed_at = COALESCE(?, completed_at)
        WHERE task_id = ?`,
       [title, description, status, priority_level, deadline, estimated_hours,
        project_id === undefined ? undefined : project_id,
        category_id === undefined ? undefined : category_id,
-       eisenhower_quadrant, req.params.id]
+       eisenhower_quadrant, completedAt, req.params.id]
     );
-    res.json({ success: true });
+    res.json({ success: true, message: status === 'completed' ? '任务已完成' : '更新成功' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
