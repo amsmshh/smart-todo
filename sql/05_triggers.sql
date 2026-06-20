@@ -17,11 +17,6 @@ BEGIN
 
   IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
 
-    -- 设置完成时间
-    IF NEW.completed_at IS NULL THEN
-      UPDATE t_task SET completed_at = NOW() WHERE task_id = NEW.task_id;
-    END IF;
-
     -- 计算实际工时(若未手动填写)
     SET v_actual = NEW.actual_hours;
     IF v_actual IS NULL THEN
@@ -55,20 +50,6 @@ BEGIN
     -- 更新精力画像
     CALL sp_update_energy_profile(NEW.assignee_id, v_actual, NEW.estimated_hours);
 
-    -- 解除被此任务阻塞的后续任务
-    UPDATE t_task t
-    JOIN t_task_dependency td ON t.task_id = td.task_id
-    SET t.status = 'pending'
-    WHERE td.depends_on_id = NEW.task_id
-      AND t.status = 'blocked'
-      -- 确保该任务的所有前置任务都已完成
-      AND NOT EXISTS (
-        SELECT 1 FROM t_task_dependency td2
-        JOIN t_task t2 ON td2.depends_on_id = t2.task_id
-        WHERE td2.task_id = t.task_id
-          AND td2.depends_on_id != NEW.task_id
-          AND t2.status != 'completed'
-      );
   END IF;
 END$$
 DELIMITER ;
