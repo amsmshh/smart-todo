@@ -2,6 +2,11 @@
 -- 智能待办事项优先级排序器 - 初始数据
 -- ================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT = utf8mb4;
+SET CHARACTER_SET_RESULTS = utf8mb4;
+SET CHARACTER_SET_CONNECTION = utf8mb4;
+
 USE smart_todo;
 
 -- ================================================================

@@ -7,7 +7,13 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'smart_todo',
   waitForConnections: true,
   connectionLimit: 10,
-  charset: 'utf8mb4'
+  charset: 'utf8mb4_unicode_ci',
+  charsetNumber: 255
+});
+
+// 确保每个连接都使用 UTF-8
+pool.on('connection', function (connection) {
+  connection.query('SET NAMES utf8mb4');
 });
 
 module.exports = pool;

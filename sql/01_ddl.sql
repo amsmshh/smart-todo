@@ -3,6 +3,11 @@
 -- 数据库: MySQL 8.0+
 -- ================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER_SET_CLIENT = utf8mb4;
+SET CHARACTER_SET_RESULTS = utf8mb4;
+SET CHARACTER_SET_CONNECTION = utf8mb4;
+
 -- 创建数据库
 DROP DATABASE IF EXISTS smart_todo;
 CREATE DATABASE smart_todo
