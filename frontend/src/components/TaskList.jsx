@@ -25,7 +25,7 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
     if (changingRef.current) return; // 状态变更中，跳过加载
     setLoading(true);
     const p = { user_id: userId };
-    if (statusFilter && statusFilter !== 'active') p.status = statusFilter;
+    if (statusFilter) p.status = statusFilter; // active 也传给后端
     if (projectFilter) p.project_id = projectFilter;
     if (search) p.search = search;
     api.getTasks(p).then(setTasks).catch(() => {}).finally(() => setLoading(false));
