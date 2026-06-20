@@ -12,7 +12,7 @@ const STATUS_MAP = {
 export default function TaskList({ userId, onRefresh, onTaskClick }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [projectFilter, setProjectFilter] = useState('');
   const [projects, setProjects] = useState([]);
   const [search, setSearch] = useState('');
@@ -23,7 +23,7 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
   const load = useCallback(() => {
     setLoading(true);
     const p = { user_id: userId };
-    if (statusFilter) p.status = statusFilter;
+    if (statusFilter && statusFilter !== 'active') p.status = statusFilter;
     if (projectFilter) p.project_id = projectFilter;
     if (search) p.search = search;
     api.getTasks(p).then(setTasks).catch(() => {}).finally(() => setLoading(false));
@@ -118,10 +118,13 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
           <input className="search-input" placeholder="搜索任务..." value={search}
             onChange={e => setSearch(e.target.value)} />
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="active">待完成</option>
             <option value="">全部</option>
             <option value="pending">待处理</option>
             <option value="in_progress">进行中</option>
             <option value="completed">已完成</option>
+            <option value="cancelled">已取消</option>
+            <option value="blocked">被阻塞</option>
           </select>
           <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
             <option value="">所有项目</option>

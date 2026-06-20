@@ -2,15 +2,46 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// 获取排序后的任务列表 (核心: 调用存储过程)
+// 获取排序后的任务列表
 router.get('/', async (req, res) => {
   try {
     const { user_id = 1, project_id, status, search } = req.query;
-    const [rows] = await db.query(
-      'CALL sp_get_sorted_tasks(?, ?, ?)',
-      [user_id, project_id || null, status || null]
-    );
-    let data = rows[0];
+
+    let data;
+    if (status === 'active') {
+      // 待完成：返回 pending + in_progress（不含已完成/已取消/被阻塞）
+      const [rows] = await db.query(
+        `SELECT t.task_id, t.title, t.status, t.priority_level, t.deadline,
+                t.estimated_hours, t.eisenhower_quadrant,
+                eq.name AS quadrant_name, p.project_name, c.category_name,
+                COALESCE(s.total_score, 0) AS smart_score,
+                COALESCE(s.urgency_score, 0) AS urgency,
+                COALESCE(s.importance_score, 0) AS importance,
+                COALESCE(s.dependency_score, 0) AS dependency,
+                COALESCE(s.energy_score, 0) AS energy,
+                COALESCE(s.history_score, 0) AS history_prob,
+                DENSE_RANK() OVER (ORDER BY COALESCE(s.total_score, 0) DESC) AS priority_rank
+         FROM t_task t
+         LEFT JOIN t_smart_score s ON t.task_id = s.task_id
+           AND s.scored_at = (SELECT MAX(scored_at) FROM t_smart_score WHERE task_id = t.task_id)
+         LEFT JOIN t_project p ON t.project_id = p.project_id
+         LEFT JOIN t_category c ON t.category_id = c.category_id
+         LEFT JOIN t_eisenhower_matrix eq ON t.eisenhower_quadrant = eq.quadrant
+         WHERE t.assignee_id = ?
+           AND t.status IN ('pending', 'in_progress')
+           AND (? IS NULL OR t.project_id = ?)
+         ORDER BY COALESCE(s.total_score, 0) DESC, t.deadline ASC`,
+        [user_id, project_id || null, project_id || null]
+      );
+      data = rows;
+    } else {
+      const [rows] = await db.query(
+        'CALL sp_get_sorted_tasks(?, ?, ?)',
+        [user_id, project_id || null, status || null]
+      );
+      data = rows[0];
+    }
+
     if (search) {
       const kw = search.toLowerCase();
       data = data.filter(t => t.title && t.title.toLowerCase().includes(kw));
