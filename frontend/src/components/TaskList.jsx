@@ -173,7 +173,7 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
                     onClick={e => e.stopPropagation()}
                     onChange={e => toggleSelect(t.task_id, e)} />
                   <span className="task-rank">#{t.priority_rank || '-'}</span>
-                  <span className={`task-title ${t.status === 'completed' ? 'completed-title' : ''}`}>{t.title}</span>
+                  <span className="task-title">{t.title}</span>
                   <span className="task-score">{score.toFixed(1)}</span>
                 </div>
                 <div className="task-card-meta">
