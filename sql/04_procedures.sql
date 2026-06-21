@@ -242,11 +242,15 @@ BEGIN
   DECLARE v_day INT;
   DECLARE v_hour INT;
   DECLARE v_performance DECIMAL(3,2);
-  DECLARE v_old_level DECIMAL(3,2);
-  DECLARE v_old_count INT;
+  DECLARE v_old_level DECIMAL(3,2) DEFAULT NULL;
+  DECLARE v_old_count INT DEFAULT 0;
   DECLARE v_new_level DECIMAL(3,2);
 
-  SET v_day = DAYOFWEEK(NOW());
+  -- 处理无匹配记录的情况，不抛出错误
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_old_level = NULL;
+
+  -- 转换星期: 1=周一, 2=周二, ..., 7=周日
+  SET v_day = ((DAYOFWEEK(NOW()) + 5) % 7) + 1;
   SET v_hour = HOUR(NOW());
 
   -- 计算表现得分: 计划/实际 (越接近1越好，超过1说明提前完成)
