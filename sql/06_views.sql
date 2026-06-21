@@ -51,26 +51,24 @@ SELECT
   t.project_id,
   p.project_name,
   c.category_name,
-  s.total_score,
-  s.urgency_score,
-  s.importance_score,
-  s.dependency_score,
-  s.energy_score,
-  s.history_score,
+  COALESCE(s.total_score, 0) AS total_score,
+  COALESCE(s.urgency_score, 0) AS urgency_score,
+  COALESCE(s.importance_score, 0) AS importance_score,
+  COALESCE(s.dependency_score, 0) AS dependency_score,
+  COALESCE(s.energy_score, 0) AS energy_score,
+  COALESCE(s.history_score, 0) AS history_score,
   s.scored_at,
-  DENSE_RANK() OVER (ORDER BY s.total_score DESC) AS priority_rank,
+  DENSE_RANK() OVER (ORDER BY COALESCE(s.total_score, 0) DESC) AS priority_rank,
   eq.name AS quadrant_name,
   fn_get_dep_depth(t.task_id) AS dep_depth,
   fn_get_blocker_count(t.task_id) AS blocking_count
 FROM t_task t
-JOIN t_smart_score s ON t.task_id = s.task_id
+LEFT JOIN t_smart_score s ON t.task_id = s.task_id
+  AND s.scored_at = (SELECT MAX(scored_at) FROM t_smart_score WHERE task_id = t.task_id)
 LEFT JOIN t_project p ON t.project_id = p.project_id
 LEFT JOIN t_category c ON t.category_id = c.category_id
 LEFT JOIN t_eisenhower_matrix eq ON t.eisenhower_quadrant = eq.quadrant
-WHERE t.status IN ('pending', 'in_progress')
-  AND s.scored_at = (
-    SELECT MAX(scored_at) FROM t_smart_score WHERE task_id = t.task_id
-  );
+WHERE t.status IN ('pending', 'in_progress');
 
 -- ================================================================
 -- 3. 用户效率统计视图
