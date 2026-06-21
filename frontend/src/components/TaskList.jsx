@@ -223,7 +223,8 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
                   <button className="btn btn-sm" onClick={e => { e.stopPropagation(); onTaskClick?.(t.task_id); }}>详情</button>
                   {t.status === 'pending' && <button className="btn btn-sm btn-start" onClick={e => { e.stopPropagation(); changeStatus(t.task_id, 'in_progress'); }}>开始</button>}
                   {t.status === 'in_progress' && <button className="btn btn-sm btn-complete" onClick={e => { e.stopPropagation(); changeStatus(t.task_id, 'completed'); }}>完成</button>}
-                  {t.status !== 'completed' && <button className="btn btn-sm btn-danger" onClick={e => { e.stopPropagation(); remove(t.task_id); }}>删除</button>}
+                  {t.status === 'blocked' && <span className="blocked-hint">等待前置任务完成</span>}
+                  {t.status !== 'completed' && t.status !== 'blocked' && <button className="btn btn-sm btn-danger" onClick={e => { e.stopPropagation(); remove(t.task_id); }}>删除</button>}
                 </div>
               </div>
             );
