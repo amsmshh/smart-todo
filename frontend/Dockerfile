@@ -7,7 +7,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN rm -rf node_modules/.vite && npm run build
 
 # ---- 运行阶段 ----
 FROM nginx:alpine
