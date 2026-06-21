@@ -98,20 +98,22 @@ GROUP BY h.user_id, u.username, c.category_name;
 -- ================================================================
 CREATE OR REPLACE VIEW v_eisenhower_summary AS
 SELECT
-  t.assignee_id,
-  t.eisenhower_quadrant,
+  u.user_id AS assignee_id,
+  m.quadrant AS eisenhower_quadrant,
   m.name AS quadrant_name,
   m.action_strategy,
   m.color,
   COUNT(t.task_id) AS task_count,
   ROUND(AVG(s.total_score), 1) AS avg_score,
   MIN(t.deadline) AS earliest_deadline
-FROM t_task t
-JOIN t_eisenhower_matrix m ON t.eisenhower_quadrant = m.quadrant
+FROM t_user u
+CROSS JOIN t_eisenhower_matrix m
+LEFT JOIN t_task t ON t.assignee_id = u.user_id
+  AND t.eisenhower_quadrant = m.quadrant
+  AND t.status IN ('pending', 'in_progress')
 LEFT JOIN t_smart_score s ON t.task_id = s.task_id
   AND s.scored_at = (SELECT MAX(scored_at) FROM t_smart_score WHERE task_id = t.task_id)
-WHERE t.status IN ('pending', 'in_progress')
-GROUP BY t.assignee_id, t.eisenhower_quadrant, m.name, m.action_strategy, m.color;
+GROUP BY u.user_id, m.quadrant, m.name, m.action_strategy, m.color;
 
 -- ================================================================
 -- 5. 任务依赖关系详情视图
