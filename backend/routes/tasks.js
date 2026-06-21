@@ -176,6 +176,26 @@ router.put('/:id', async (req, res) => {
        category_id === undefined ? null : category_id,
        eisenhower_quadrant, completedAt, req.params.id]
     );
+
+    // 完成任务后，自动解除被阻塞的后续任务
+    if (status === 'completed') {
+      await db.query(
+        `UPDATE t_task t
+         JOIN t_task_dependency td ON t.task_id = td.task_id
+         SET t.status = 'pending'
+         WHERE td.depends_on_id = ?
+           AND t.status = 'blocked'
+           AND NOT EXISTS (
+             SELECT 1 FROM t_task_dependency td2
+             JOIN t_task t2 ON td2.depends_on_id = t2.task_id
+             WHERE td2.task_id = t.task_id
+               AND td2.depends_on_id != ?
+               AND t2.status != 'completed'
+           )`,
+        [req.params.id, req.params.id]
+      );
+    }
+
     res.json({ success: true, message: status === 'completed' ? '任务已完成' : '更新成功' });
   } catch (err) {
     res.status(500).json({ success: false, message: safeMsg(err) });
