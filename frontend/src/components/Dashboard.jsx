@@ -14,9 +14,10 @@ export default function Dashboard({ userId }) {
   }, [userId]);
 
   if (loading) return <div className="loading">加载中...</div>;
+  if (!stats) return <div className="empty">加载失败，请刷新重试</div>;
 
   const sc = {};
-  (stats?.status_counts || []).forEach(s => { sc[s.status] = s.count; });
+  (stats.status_counts || []).forEach(s => { sc[s.status] = s.count; });
 
   return (
     <div className="dashboard">

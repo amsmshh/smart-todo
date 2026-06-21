@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
+// 安全错误信息（不暴露SQL细节）
+function safeMsg(err) {
+  if (err.code === 'ER_DUP_ENTRY') return '数据重复';
+  if (err.code === 'ER_NO_REFERENCED_ROW_2') return '关联数据不存在';
+  if (err.code === 'ER_CHECK_CONSTRAINT_VIOLATED') return '数据不合法';
+  return '操作失败，请稍后重试';
+}
+
 // 获取排序后的任务列表
 router.get('/', async (req, res) => {
   try {
@@ -9,7 +17,6 @@ router.get('/', async (req, res) => {
 
     let data;
     if (status === 'active') {
-      // 待完成：返回 pending + in_progress（不含已完成/已取消/被阻塞）
       const [rows] = await db.query(
         `SELECT t.task_id, t.title, t.status, t.priority_level, t.deadline,
                 t.estimated_hours, t.eisenhower_quadrant,
@@ -48,7 +55,7 @@ router.get('/', async (req, res) => {
     }
     res.json({ success: true, data });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -61,18 +68,15 @@ router.get('/:id', async (req, res) => {
     );
     if (rows.length === 0) return res.status(404).json({ success: false, message: '任务不存在' });
 
-    // 获取标签
     const [tags] = await db.query(
       `SELECT t.tag_id, t.tag_name, t.color FROM t_tag t
        JOIN t_task_tag tt ON t.tag_id = tt.tag_id WHERE tt.task_id = ?`,
       [req.params.id]
     );
 
-    // 获取依赖
     const [deps] = await db.query('SELECT * FROM v_task_dependencies WHERE task_id = ?', [req.params.id]);
     const [revDeps] = await db.query('SELECT * FROM v_task_dependencies WHERE depends_on_id = ?', [req.params.id]);
 
-    // 获取最新评分
     const [scores] = await db.query(
       'SELECT * FROM t_smart_score WHERE task_id = ? ORDER BY scored_at DESC LIMIT 5',
       [req.params.id]
@@ -83,7 +87,7 @@ router.get('/:id', async (req, res) => {
       data: { ...rows[0], tags, dependencies: deps, dependents: revDeps, scores }
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -91,10 +95,20 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { title, description, priority_level, deadline, estimated_hours, project_id, category_id, assignee_id = 1, tags } = req.body;
+
+    // 输入校验
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, message: '标题不能为空' });
+    }
+    const pl = Number(priority_level) || 3;
+    if (pl < 1 || pl > 5) {
+      return res.status(400).json({ success: false, message: '优先级必须在1-5之间' });
+    }
+
     const [result] = await db.query(
       `INSERT INTO t_task (title, description, priority_level, deadline, estimated_hours, project_id, category_id, assignee_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, description, priority_level || 3, deadline, estimated_hours, project_id, category_id, assignee_id]
+      [title.trim(), description || null, pl, deadline || null, estimated_hours || null, project_id || null, category_id || null, assignee_id]
     );
     const taskId = result.insertId;
 
@@ -104,26 +118,41 @@ router.post('/', async (req, res) => {
       await db.query('INSERT INTO t_task_tag (task_id, tag_id) VALUES ?', [values]);
     }
 
-    // 自动评分
+    // 自动评分（用同一连接避免session变量串值）
     let score = null;
+    const conn = await db.getConnection();
     try {
-      await db.query('CALL sp_calculate_smart_score(?, NULL, @total)', [taskId]);
-      const [scoreRows] = await db.query('SELECT @total as total_score');
+      await conn.query('CALL sp_calculate_smart_score(?, NULL, @total)', [taskId]);
+      const [scoreRows] = await conn.query('SELECT @total as total_score');
       score = scoreRows[0]?.total_score;
     } catch (e) { /* 评分失败不影响创建 */ }
+    finally { conn.release(); }
 
     res.json({ success: true, data: { task_id: taskId, smart_score: score } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
 // 更新任务
 router.put('/:id', async (req, res) => {
   try {
+    // 先检查任务是否存在
+    const [existing] = await db.query('SELECT task_id FROM t_task WHERE task_id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '任务不存在' });
+    }
+
     const { title, description, status, priority_level, deadline, estimated_hours, project_id, category_id, eisenhower_quadrant } = req.body;
 
-    // 如果状态变为 completed，同时设置 completed_at
+    // 优先级校验
+    if (priority_level !== undefined) {
+      const pl = Number(priority_level);
+      if (pl < 1 || pl > 5) {
+        return res.status(400).json({ success: false, message: '优先级必须在1-5之间' });
+      }
+    }
+
     let completedAt = undefined;
     if (status === 'completed') {
       completedAt = new Date();
@@ -137,40 +166,49 @@ router.put('/:id', async (req, res) => {
         priority_level = COALESCE(?, priority_level),
         deadline = COALESCE(?, deadline),
         estimated_hours = COALESCE(?, estimated_hours),
-        project_id = ?,
-        category_id = ?,
-        eisenhower_quadrant = ?,
+        project_id = COALESCE(?, project_id),
+        category_id = COALESCE(?, category_id),
+        eisenhower_quadrant = COALESCE(?, eisenhower_quadrant),
         completed_at = COALESCE(?, completed_at)
        WHERE task_id = ?`,
       [title, description, status, priority_level, deadline, estimated_hours,
-       project_id === undefined ? undefined : project_id,
-       category_id === undefined ? undefined : category_id,
+       project_id === undefined ? null : project_id,
+       category_id === undefined ? null : category_id,
        eisenhower_quadrant, completedAt, req.params.id]
     );
     res.json({ success: true, message: status === 'completed' ? '任务已完成' : '更新成功' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
 // 删除任务
 router.delete('/:id', async (req, res) => {
   try {
+    const [existing] = await db.query('SELECT task_id FROM t_task WHERE task_id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ success: false, message: '任务不存在' });
+    }
     await db.query('DELETE FROM t_task WHERE task_id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
 // 手动触发智能评分
 router.post('/:id/score', async (req, res) => {
   try {
-    await db.query('CALL sp_calculate_smart_score(?, NULL, @total)', [req.params.id]);
-    const [rows] = await db.query('SELECT @total as total_score');
-    res.json({ success: true, data: { total_score: rows[0].total_score } });
+    const conn = await db.getConnection();
+    try {
+      await conn.query('CALL sp_calculate_smart_score(?, NULL, @total)', [req.params.id]);
+      const [rows] = await conn.query('SELECT @total as total_score');
+      res.json({ success: true, data: { total_score: rows[0].total_score } });
+    } finally {
+      conn.release();
+    }
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -178,12 +216,17 @@ router.post('/:id/score', async (req, res) => {
 router.post('/:id/dependencies', async (req, res) => {
   try {
     const { depends_on_id, dep_type = 'FS' } = req.body;
-    await db.query('CALL sp_add_task_dependency(?, ?, ?, @result)',
-      [req.params.id, depends_on_id, dep_type]);
-    const [rows] = await db.query('SELECT @result as result');
-    res.json({ success: true, message: rows[0].result });
+    const conn = await db.getConnection();
+    try {
+      await conn.query('CALL sp_add_task_dependency(?, ?, ?, @result)',
+        [req.params.id, depends_on_id, dep_type]);
+      const [rows] = await conn.query('SELECT @result as result');
+      res.json({ success: true, message: rows[0].result });
+    } finally {
+      conn.release();
+    }
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -193,7 +236,7 @@ router.post('/classify/:userId', async (req, res) => {
     await db.query('CALL sp_classify_eisenhower(?)', [req.params.userId]);
     res.json({ success: true, message: '矩阵归类完成' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -206,7 +249,7 @@ router.get('/eisenhower/:userId', async (req, res) => {
     );
     res.json({ success: true, data: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -216,7 +259,7 @@ router.post('/refresh-scores/all', async (req, res) => {
     await db.query('CALL sp_refresh_all_scores()');
     res.json({ success: true, message: '批量评分刷新完成' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -228,7 +271,7 @@ router.post('/batch-status', async (req, res) => {
     await db.query('UPDATE t_task SET status = ? WHERE task_id IN (?)', [status, ids]);
     res.json({ success: true, message: `已更新${ids.length}个任务` });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
@@ -240,21 +283,28 @@ router.post('/batch-delete', async (req, res) => {
     await db.query('DELETE FROM t_task WHERE task_id IN (?)', [ids]);
     res.json({ success: true, message: `已删除${ids.length}个任务` });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: safeMsg(err) });
   }
 });
 
-// 更新排序
+// 更新排序（用事务批量更新，避免N+1查询）
 router.post('/reorder', async (req, res) => {
+  const conn = await db.getConnection();
   try {
-    const { orders } = req.body; // [{task_id, sort_order}, ...]
+    const { orders } = req.body;
     if (!orders?.length) return res.status(400).json({ success: false, message: '参数不完整' });
+
+    await conn.beginTransaction();
     for (const { task_id, sort_order } of orders) {
-      await db.query('UPDATE t_task SET sort_order = ? WHERE task_id = ?', [sort_order, task_id]);
+      await conn.query('UPDATE t_task SET sort_order = ? WHERE task_id = ?', [sort_order, task_id]);
     }
+    await conn.commit();
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    await conn.rollback();
+    res.status(500).json({ success: false, message: safeMsg(err) });
+  } finally {
+    conn.release();
   }
 });
 

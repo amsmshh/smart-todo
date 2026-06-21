@@ -136,7 +136,7 @@ BEGIN
     AND (deadline IS NULL OR deadline > DATE_ADD(NOW(), INTERVAL 72 HOUR))
     AND priority_level <= 2;
 
-  -- 象限3: 紧急不重要 (deadline <= 24h AND priority >= 4)
+  -- 象限3: 紧急不重要 (deadline <= 24h AND priority >= 3)
   UPDATE t_task
   SET eisenhower_quadrant = 3
   WHERE assignee_id = p_user_id
@@ -144,7 +144,7 @@ BEGIN
     AND eisenhower_quadrant IS NULL
     AND deadline IS NOT NULL
     AND deadline <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
-    AND priority_level >= 4;
+    AND priority_level >= 3;
 
   -- 象限4: 其余全部归入不紧急不重要
   UPDATE t_task

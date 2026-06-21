@@ -45,18 +45,23 @@ export default function TaskDetail({ taskId, onClose, onSaved }) {
     setEditing(true);
   };
 
+  const [saveErr, setSaveErr] = useState('');
+
   const save = async () => {
-    const payload = { ...form };
-    if (!payload.deadline) payload.deadline = null;
-    if (!payload.project_id) payload.project_id = null;
-    if (!payload.category_id) payload.category_id = null;
-    if (payload.estimated_hours === '') payload.estimated_hours = null;
-    payload.priority_level = Number(payload.priority_level);
-    await api.updateTask(taskId, payload);
-    const refreshed = await api.getTask(taskId);
-    setTask(refreshed);
-    setEditing(false);
-    onSaved?.();
+    setSaveErr('');
+    try {
+      const payload = { ...form };
+      if (!payload.deadline) payload.deadline = null;
+      if (!payload.project_id) payload.project_id = null;
+      if (!payload.category_id) payload.category_id = null;
+      if (payload.estimated_hours === '') payload.estimated_hours = null;
+      payload.priority_level = Number(payload.priority_level);
+      await api.updateTask(taskId, payload);
+      const refreshed = await api.getTask(taskId);
+      setTask(refreshed);
+      setEditing(false);
+      onSaved?.();
+    } catch (e) { setSaveErr(e.message); }
   };
 
   const addDep = async () => {
@@ -111,6 +116,7 @@ export default function TaskDetail({ taskId, onClose, onSaved }) {
                 {categories.map(c => <option key={c.category_id} value={c.category_id}>{c.category_name}</option>)}
               </select></label>
             </div>
+            {saveErr && <div className="form-message error">{saveErr}</div>}
             <div className="modal-actions">
               <button className="btn" onClick={() => setEditing(false)}>取消</button>
               <button className="btn btn-primary" onClick={save}>保存</button>

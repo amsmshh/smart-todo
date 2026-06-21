@@ -54,15 +54,19 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
 
   const remove = async (id) => {
     if (!confirm('确定删除？')) return;
-    await api.deleteTask(id);
-    setSelected(s => { const n = new Set(s); n.delete(id); return n; });
-    load(); onRefresh?.();
+    try {
+      await api.deleteTask(id);
+      setSelected(s => { const n = new Set(s); n.delete(id); return n; });
+      load(); onRefresh?.();
+    } catch (e) { alert('删除失败: ' + e.message); }
   };
 
   const refreshAll = async () => {
     setLoading(true);
-    await api.refreshAllScores();
-    load(); onRefresh?.();
+    try {
+      await api.refreshAllScores();
+      load(); onRefresh?.();
+    } catch (e) { alert('评分刷新失败: ' + e.message); setLoading(false); }
   };
 
   // 批量操作
@@ -80,18 +84,22 @@ export default function TaskList({ userId, onRefresh, onTaskClick }) {
   };
 
   const batchStatus = async (status) => {
-    const ids = [...selected];
-    await api.batchStatus(ids, status);
-    setSelected(new Set());
-    load(); onRefresh?.();
+    try {
+      const ids = [...selected];
+      await api.batchStatus(ids, status);
+      setSelected(new Set());
+      load(); onRefresh?.();
+    } catch (e) { alert('批量操作失败: ' + e.message); }
   };
 
   const batchDelete = async () => {
     if (!confirm(`确定删除${selected.size}个任务？`)) return;
-    const ids = [...selected];
-    await api.batchDelete(ids);
-    setSelected(new Set());
-    load(); onRefresh?.();
+    try {
+      const ids = [...selected];
+      await api.batchDelete(ids);
+      setSelected(new Set());
+      load(); onRefresh?.();
+    } catch (e) { alert('批量删除失败: ' + e.message); }
   };
 
   // 拖拽排序
