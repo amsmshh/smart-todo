@@ -17,6 +17,7 @@ export default function TaskDetail({ taskId, onClose, onSaved }) {
   const [categories, setCategories] = useState([]);
   const [depId, setDepId] = useState('');
   const [depMsg, setDepMsg] = useState('');
+  const [allTasks, setAllTasks] = useState([]);
 
   useEffect(() => {
     setLoading(true);
@@ -24,10 +25,12 @@ export default function TaskDetail({ taskId, onClose, onSaved }) {
       api.getTask(taskId),
       api.getProjects().catch(() => []),
       api.getCategories().catch(() => []),
-    ]).then(([t, p, c]) => {
+      api.getTasks({}).catch(() => []),
+    ]).then(([t, p, c, tasks]) => {
       setTask(t);
       setProjects(p);
       setCategories(c);
+      setAllTasks(tasks || []);
     }).finally(() => setLoading(false));
   }, [taskId]);
 
@@ -170,7 +173,17 @@ export default function TaskDetail({ taskId, onClose, onSaved }) {
             <div className="detail-section">
               <h4>添加依赖</h4>
               <div className="dep-add-row">
-                <input placeholder="前置任务ID" value={depId} onChange={e => setDepId(e.target.value)} />
+                <select value={depId} onChange={e => setDepId(e.target.value)}>
+                  <option value="">选择前置任务...</option>
+                  {allTasks
+                    .filter(t => t.task_id !== taskId && !(task.dependencies || []).some(d => d.depends_on_id === t.task_id))
+                    .map(t => (
+                      <option key={t.task_id} value={t.task_id}>
+                        [{t.task_id}] {t.title}
+                      </option>
+                    ))
+                  }
+                </select>
                 <button className="btn btn-sm" onClick={addDep}>添加</button>
                 {depMsg && <span className="dep-msg">{depMsg}</span>}
               </div>
