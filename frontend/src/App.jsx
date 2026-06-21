@@ -47,7 +47,7 @@ export default function App() {
         {tab === 'matrix' && <Matrix userId={user.user_id} />}
         {tab === 'create' && <TaskForm userId={user.user_id} onSuccess={() => { setRk(k => k + 1); setTab('tasks'); }} />}
       </main>
-      {detailId && <TaskDetail taskId={detailId} onClose={() => setDetailId(null)} onSaved={() => setRk(k => k + 1)} />}
+      {detailId && <TaskDetail taskId={detailId} onClose={() => setDetailId(null)} onSaved={() => setRk(k => k + 1)} userId={user.user_id} />}
       {showRules && <Rules userId={user.user_id} onClose={() => setShowRules(false)} />}
     </div>
   );

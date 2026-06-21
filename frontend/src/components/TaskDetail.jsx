@@ -8,7 +8,7 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: '已取消' },
 ];
 
-export default function TaskDetail({ taskId, onClose, onSaved }) {
+export default function TaskDetail({ taskId, onClose, onSaved, userId }) {
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -25,7 +25,7 @@ export default function TaskDetail({ taskId, onClose, onSaved }) {
       api.getTask(taskId),
       api.getProjects().catch(() => []),
       api.getCategories().catch(() => []),
-      api.getTasks({}).catch(() => []),
+      api.getTasks({ user_id: userId }).catch(() => []),
     ]).then(([t, p, c, tasks]) => {
       setTask(t);
       setProjects(p);
